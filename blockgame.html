@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>KaaX Block Blast</title>
+    <style>
+        :root {
+            --grid-size: 8; --cell-size: min(11vmin, 65px); --grid-gap: 2px;
+            --board-bg: #1a1a2e; --cell-bg: #2a2a4e; --text-color: #e0e0ff;
+            --score-color: #f0f0a0; --shadow-light: rgba(255, 255, 255, 0.1);
+            --shadow-dark: rgba(0, 0, 0, 0.3);
+            --color-l: #f9a825; --color-j: #1e88e5; --color-i: #43a047;
+            --color-o: #ffeb3b; --color-t: #8e24aa; --color-s: #e53935;
+            --color-z: #00acc1; --color-dot: #bdbdbd; --color-u: #d81b60;
+            --color-square3: #607d8b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #0f0f1e; color: var(--text-color); overflow: hidden; touch-action: none; }
+        .game-container { display: flex; flex-direction: column; align-items: center; padding: 15px; background-color: var(--board-bg); border-radius: 10px; box-shadow: 0 5px 15px var(--shadow-dark); width: 95%; max-width: 650px; position: relative; }
+        .game-title { color: var(--score-color); text-align: center; margin-bottom: 15px; font-size: clamp(1.8rem, 6vmin, 2.5rem); text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); }
+        .game-header { display: flex; justify-content: space-between; align-items: center; width: calc(var(--cell-size) * var(--grid-size) + var(--grid-gap) * (var(--grid-size) - 1) + 10px); margin-bottom: 10px; font-size: clamp(1rem, 4vmin, 1.5rem); font-weight: bold; }
+        .game-info { display: flex; gap: 15px; }
+        .score-display span { color: var(--score-color); margin-left: 5px; transition: transform 0.3s ease, color 0.3s ease; }
+        .score-display span.highscore-flash { animation: highscoreFlash 0.6s ease-out; }
+        @keyframes highscoreFlash {
+             0% { transform: scale(1); color: var(--score-color); }
+             50% { transform: scale(1.2); color: #fff700; text-shadow: 0 0 8px #fff700; }
+             100% { transform: scale(1); color: var(--score-color); }
+        }
+        #settings-button { background: none; border: none; color: var(--text-color); font-size: clamp(1.8rem, 6vmin, 2.5rem); cursor: pointer; padding: 0 5px; line-height: 1; }
+        #settings-button:hover { color: var(--score-color); }
+        #game-grid { display: grid; grid-template-columns: repeat(var(--grid-size), var(--cell-size)); grid-template-rows: repeat(var(--grid-size), var(--cell-size)); gap: var(--grid-gap); background-color: #0a0a18; border: 3px solid #4a4a6e; padding: 5px; border-radius: 5px; margin-bottom: 20px; position: relative; touch-action: none; width: calc(var(--grid-size) * var(--cell-size) + (var(--grid-size) - 1) * var(--grid-gap) + 10px); height: calc(var(--grid-size) * var(--cell-size) + (var(--grid-size) - 1) * var(--grid-gap) + 10px); }
+        .grid-cell { background-color: var(--cell-bg); border-radius: 3px; box-shadow: inset 1px 1px 2px var(--shadow-dark), inset -1px -1px 2px var(--shadow-light); transition: background-color 0.1s ease, transform 0.2s ease, opacity 0.4s ease; position: relative; }
+        .grid-cell.suggestion-cell { background-color: rgba(255, 255, 255, 0.25); transition: background-color 0.05s linear; }
+        .grid-cell.occupied { box-shadow: 0 0 5px rgba(255, 255, 255, 0.3); z-index: 1; }
+        .grid-cell.clearing { animation: clearAnimation 0.4s ease-out forwards; }
+        @keyframes clearAnimation { 0% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(0.1); opacity: 0; } }
+        .next-blocks-container { display: flex; justify-content: space-around; align-items: center; width: 100%; min-height: calc(var(--cell-size) * 4); padding: 10px 0; background-color: rgba(0,0,0,0.1); border-radius: 5px; }
+        .block-preview { display: grid; justify-content: center; align-content: center; cursor: grab; opacity: 1; transition: opacity 0.3s ease, transform 0.2s ease; touch-action: none; }
+        .block-preview:active { cursor: grabbing; transform: scale(1.1); }
+        .block-preview.dragging { opacity: 0.5; cursor: grabbing; }
+        .block-preview.empty { opacity: 0; pointer-events: none; min-width: calc(var(--cell-size) * 1); min-height: calc(var(--cell-size) * 1); }
+        .preview-cell { width: calc(var(--cell-size) * 0.6); height: calc(var(--cell-size) * 0.6); border-radius: 2px; margin: 1px; box-shadow: inset 1px 1px 1px var(--shadow-dark), inset -1px -1px 1px var(--shadow-light); }
+        .color-l { background-color: var(--color-l); } .color-j { background-color: var(--color-j); } .color-i { background-color: var(--color-i); }
+        .color-o { background-color: var(--color-o); } .color-t { background-color: var(--color-t); } .color-s { background-color: var(--color-s); }
+        .color-z { background-color: var(--color-z); } .color-dot { background-color: var(--color-dot); } .color-u { background-color: var(--color-u); }
+        .color-square3 { background-color: var(--color-square3); }
+        .drag-ghost { position: absolute; pointer-events: none; z-index: 1000; opacity: 0.7; transform: translate(-10%, -10%); display: grid; }
+        .drag-ghost .preview-cell { width: var(--cell-size); height: var(--cell-size); margin: 1px; border-radius: 3px; }
+        .game-over-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 450px; padding: 30px; background-color: rgba(0, 0, 0, 0.85); border-radius: 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; opacity: 0; visibility: hidden; transition: opacity 0.5s ease, visibility 0s linear 0.5s; }
+        .game-over-screen.visible { opacity: 1; visibility: visible; transition: opacity 0.5s ease, visibility 0s linear 0s; }
+        .game-over-screen h2 { font-size: clamp(2rem, 8vmin, 3.5rem); margin-bottom: 15px; color: #ff5555; animation: gameOverText 0.8s ease-in-out; }
+        @keyframes gameOverText { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+        .game-over-screen p { font-size: clamp(1rem, 4vmin, 1.5rem); margin-bottom: 25px; }
+        #restart-button { padding: 12px 25px; font-size: clamp(1rem, 4vmin, 1.3rem); cursor: pointer; background-color: var(--color-i); color: white; border: none; border-radius: 5px; box-shadow: 0 3px 5px var(--shadow-dark); transition: background-color 0.2s ease, transform 0.1s ease; }
+        #restart-button:hover { background-color: #5cb85c; }
+        #restart-button:active { transform: scale(0.95); }
+        .combo-message { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); font-size: clamp(2rem, 8vmin, 3.5rem); font-weight: bold; color: #ffeb3b; text-shadow: 2px 2px 4px rgba(0,0,0,0.7); opacity: 0; animation: comboFade 1.5s ease-out forwards; pointer-events: none; z-index: 110; white-space: nowrap; }
+        @keyframes comboFade { 0% { opacity: 1; transform: translate(-50%, -50%) scale(0.8); } 70% { opacity: 1; transform: translate(-50%, -60%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -70%) scale(1.2); } }
+        @keyframes placeAnim { 0% { transform: scale(0.8); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
+        .placed { animation: placeAnim 0.2s ease-out; }
+        #settings-modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1000; opacity: 0; transition: opacity 0.3s ease-in-out; }
+        #settings-modal.visible { display: flex; opacity: 1; }
+        .settings-content { background-color: var(--board-bg); padding: 25px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); width: 80%; max-width: 350px; position: relative; }
+        .settings-content h2 { text-align: center; margin-bottom: 25px; color: var(--score-color); font-size: clamp(1.4rem, 5vmin, 1.8rem); }
+        #close-settings-button { position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 2rem; color: var(--text-color); cursor: pointer; line-height: 1; }
+        #close-settings-button:hover { color: #ff5555; }
+        .setting-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: clamp(1rem, 4vmin, 1.3rem); }
+        .toggle-switch { position: relative; display: inline-block; width: 60px; height: 30px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 30px; }
+        .slider:before { position: absolute; content: ""; height: 24px; width: 24px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--color-i); }
+        input:checked + .slider:before { transform: translateX(30px); }
+
+        /* --- Styles for About Button --- */
+        #about-button {
+            display: block; /* To allow margin auto and width */
+            width: fit-content; /* Adjust width to content */
+            margin: 25px auto 0; /* Top margin 25px, centered horizontally */
+            padding: 10px 25px;
+            font-size: clamp(1rem, 4vmin, 1.2rem);
+            cursor: pointer;
+            background-color: var(--color-j); /* Blue color from theme */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            box-shadow: 0 3px 5px var(--shadow-dark);
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+        #about-button:hover {
+            background-color: #42a5f5; /* Lighter blue */
+        }
+        #about-button:active {
+            transform: translateY(1px) scale(0.98); /* Press effect */
+        }
+        /* --- End Styles for About Button --- */
+
+    </style>
+</head>
+<body>
+    <!-- Outer container for centering -->
+    <div class="game-container">
+        <h2 class="game-title">Block Blast</h2>
+        <!-- Header with Score Info & Settings Button -->
+        <div class="game-header">
+             <div class="game-info">
+                 <div class="score-display">Score: <span id="current-score">0</span></div>
+                 <div class="score-display">High Score: <span id="high-score">0</span></div>
+             </div>
+             <button id="settings-button" aria-label="Settings">⚙</button>
+        </div>
+
+        <!-- The Grid -->
+        <div id="game-grid"></div>
+
+        <!-- Container for Blocks to Drag -->
+        <div class="next-blocks-container" id="next-blocks">
+            <div class="block-preview" id="block-preview-0" draggable="true"></div>
+            <div class="block-preview" id="block-preview-1" draggable="true"></div>
+            <div class="block-preview" id="block-preview-2" draggable="true"></div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div class="game-over-screen" id="game-over-screen">
+            <h2>Game Over!</h2>
+            <p id="final-score"></p>
+            <button id="restart-button">Restart Game</button>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal">
+            <div class="settings-content">
+                <button id="close-settings-button" aria-label="Close settings">×</button>
+                <h2>Settings</h2>
+                <div class="setting-item">
+                    <span>Sound Effects</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="sound-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <!-- Music toggle removed -->
+
+                <!-- About Button Added Here -->
+                <button id="about-button">About</button>
+            </div>
+        </div>
+
+        <!-- Container for Combo Messages -->
+        <div id="combo-message-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 110;"></div>
+
+    </div> <!-- End of .game-container -->
+
+    <!-- Container for the Drag Ghost -->
+    <div id="drag-ghost-container" style="position: fixed; top: 0; left: 0; pointer-events: none; z-index: 1000;"></div>
+
+    <!-- Audio Elements -->
+    <!-- Removed background music element -->
+    <audio id="sfx-place" src="place.mp3" preload="auto"></audio>
+    <audio id="sfx-clear" src="clear.mp3" preload="auto"></audio>
+    <audio id="sfx-combo" src="combo.mp3" preload="auto"></audio>
+    <audio id="sfx-invalid" src="invalid.wav" preload="auto"></audio>
+    <audio id="sfx-gameover" src="gameover.wav" preload="auto"></audio>
+
+    <script>
+        // --- JavaScript Logic ---
+
+        // Element References (Existing)
+        const gridElement = document.getElementById('game-grid');
+        const nextBlocksContainer = document.getElementById('next-blocks');
+        const currentScoreElement = document.getElementById('current-score');
+        const highScoreElement = document.getElementById('high-score');
+        const highScoreSpan = document.getElementById('high-score');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreElement = document.getElementById('final-score');
+        const restartButton = document.getElementById('restart-button');
+        const blockPreviewElements = [
+            document.getElementById('block-preview-0'),
+            document.getElementById('block-preview-1'),
+            document.getElementById('block-preview-2'),
+        ];
+        const dragGhostContainer = document.getElementById('drag-ghost-container');
+        const comboMessageContainer = document.getElementById('combo-message-container');
+        const settingsButton = document.getElementById('settings-button');
+        const settingsModal = document.getElementById('settings-modal');
+        const closeSettingsButton = document.getElementById('close-settings-button');
+        const soundToggle = document.getElementById('sound-toggle');
+        // Removed musicToggle
+
+        // Element Reference for the new About button
+        const aboutButton = document.getElementById('about-button'); // <-- ADDED
+
+        // Audio Elements References
+        const sfxPlace = document.getElementById('sfx-place');
+        const sfxClear = document.getElementById('sfx-clear');
+        const sfxCombo = document.getElementById('sfx-combo');
+        const sfxInvalid = document.getElementById('sfx-invalid');
+        const sfxGameOver = document.getElementById('sfx-gameover');
+
+        // Constants and Game State (Existing)
+        const GRID_SIZE = 8;
+        let grid = [];
+        let currentBlocks = [];
+        let score = 0;
+        let highScore = 0;
+        let isGameOver = false;
+        let draggedBlockData = null;
+        let comboCount = 0;
+        let settings = { soundOn: true };
+        let currentSuggestionCells = new Set();
+        let lastValidSuggestionCoords = { row: null, col: null };
+
+        // Block Definitions (Existing - abbreviated for brevity)
+        const blockDefs = {
+             'I': { shape: [[0,0], [1,0], [2,0], [3,0]], color: 'color-i' }, 'I-vert': { shape: [[0,0], [0,1], [0,2], [0,3]], color: 'color-i' },
+             'L': { shape: [[0,0], [0,1], [0,2], [1,2]], color: 'color-l' }, 'J': { shape: [[1,0], [1,1], [1,2], [0,2]], color: 'color-j' },
+             'T': { shape: [[0,0], [1,0], [2,0], [1,1]], color: 'color-t' }, 'O': { shape: [[0,0], [1,0], [0,1], [1,1]], color: 'color-o' },
+             'S': { shape: [[1,0], [2,0], [0,1], [1,1]], color: 'color-s' }, 'Z': { shape: [[0,0], [1,0], [1,1], [2,1]], color: 'color-z' },
+             'Dot': { shape: [[0,0]], color: 'color-dot' }, 'Line-2': { shape: [[0,0], [1,0]], color: 'color-i' }, 'Line-3': { shape: [[0,0], [1,0], [2,0]], color: 'color-i' },
+             'Line-2-vert': { shape: [[0,0], [0,1]], color: 'color-i' }, 'Line-3-vert': { shape: [[0,0], [0,1], [0,2]], color: 'color-i' },
+             'L-small': { shape: [[0,0], [0,1], [1,1]], color: 'color-l' }, 'L-small-90': { shape: [[0,1], [1,1], [1,0]], color: 'color-l' },
+             'L-small-180': { shape: [[0,0], [1,0], [1,1]], color: 'color-l' }, 'L-small-270': { shape: [[0,0], [1,0], [0,1]], color: 'color-l' },
+             'U': { shape: [[0,0], [2,0], [0,1], [1,1], [2,1]], color: 'color-u' }, 'T-rev': { shape: [[1,0], [0,1], [1,1], [2,1]], color: 'color-t' },
+             'Square-3': { shape: [[0,0], [1,0], [2,0], [0,1], [1,1], [2,1], [0,2], [1,2], [2,2]], color: 'color-square3' },
+        };
+        const blockTypes = Object.keys(blockDefs);
+
+        // --- Audio Helper (Existing) ---
+        function playSound(soundElement) {
+            if (settings.soundOn && soundElement) {
+                soundElement.currentTime = 0;
+                soundElement.play().catch(error => console.log(`SFX play error: ${error.message}`));
+            }
+        }
+
+        // --- Initialization (Existing) ---
+        function initGame() {
+            console.log("Initializing game...");
+            isGameOver = false; score = 0; comboCount = 0;
+            grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+            currentBlocks = [null, null, null];
+            createGridDOM();
+            loadSettings();
+            updateSettingsUI();
+            loadHighScore(); updateScoreDisplay();
+            generateNextBlocksSet(); displayBlocksPreview();
+            gameOverScreen.classList.remove('visible'); settingsModal.classList.remove('visible');
+            gridElement.style.opacity = 1; nextBlocksContainer.style.opacity = 1;
+            clearSuggestion();
+            console.log("Game initialized.");
+        }
+        // --- createGridDOM (Existing - No Changes) ---
+        function createGridDOM() { if (!gridElement) return; gridElement.innerHTML = ''; let cellCount = 0; for (let r = 0; r < GRID_SIZE; r++) for (let c = 0; c < GRID_SIZE; c++) { const cell = document.createElement('div'); cell.classList.add('grid-cell'); cell.dataset.row = r; cell.dataset.col = c; gridElement.appendChild(cell); cellCount++; } }
+        // --- loadHighScore (Existing - No Changes) ---
+        function loadHighScore() { highScore = parseInt(localStorage.getItem('blockBlastHighScore') || '0'); }
+
+        // --- High Score Handling with Animation (Existing - No Changes) ---
+        function saveHighScore() { if (score > highScore) { highScore = score; localStorage.setItem('blockBlastHighScore', highScore); highScoreSpan.textContent = highScore; highScoreSpan.classList.add('highscore-flash'); setTimeout(() => { highScoreSpan.classList.remove('highscore-flash'); }, 600); } updateScoreDisplay(); }
+
+        // --- Settings Handling (Existing - No Changes) ---
+        function loadSettings() { const s = localStorage.getItem('blockBlastSettings'); if(s) { try { const p=JSON.parse(s); settings.soundOn=typeof p.soundOn==='boolean'?p.soundOn:settings.soundOn; } catch(e){ console.error("Error loading settings:", e); } } }
+        function saveSettings() { try { localStorage.setItem('blockBlastSettings', JSON.stringify({ soundOn: settings.soundOn })); } catch(e){ console.error("Error saving settings:", e); } }
+        function updateSettingsUI() { soundToggle.checked = settings.soundOn; }
+        function toggleSound() { settings.soundOn = !settings.soundOn; console.log("Sound toggled:", settings.soundOn); saveSettings(); }
+
+        // --- Block Generation/Display (Existing - No Changes) ---
+        function getRandomBlockType() { return blockTypes[Math.floor(Math.random() * blockTypes.length)]; }
+        function generateNextBlocksSet() { let generatedCount = 0; for (let i = 0; i < 3; i++) { if (currentBlocks[i] === null) { const type = getRandomBlockType(); currentBlocks[i] = {...blockDefs[type], type: type }; generatedCount++; } } }
+        function displayBlocksPreview() { blockPreviewElements.forEach((previewEl, index) => { previewEl.innerHTML = ''; previewEl.classList.remove('empty', 'dragging'); previewEl.setAttribute('draggable', 'false'); const blockDef = currentBlocks[index]; if (blockDef) { previewEl.setAttribute('draggable', 'true'); previewEl.dataset.blockIndex = index; const maxX = blockDef.shape.reduce((max, p) => Math.max(max, p[0]), -1) + 1; const maxY = blockDef.shape.reduce((max, p) => Math.max(max, p[1]), -1) + 1; previewEl.style.gridTemplateColumns = `repeat(${maxX}, calc(var(--cell-size) * 0.6))`; previewEl.style.gridTemplateRows = `repeat(${maxY}, calc(var(--cell-size) * 0.6))`; previewEl.style.width = `calc(${maxX} * calc(var(--cell-size) * 0.6 + 2px))`; previewEl.style.height = `calc(${maxY} * calc(var(--cell-size) * 0.6 + 2px))`; const shapeMap = {}; blockDef.shape.forEach(p => { shapeMap[`${p[0]},${p[1]}`] = true; }); for (let r = 0; r < maxY; r++) for (let c = 0; c < maxX; c++) { const cell = document.createElement('div'); cell.classList.add('preview-cell'); if (shapeMap[`${c},${r}`]) cell.classList.add(blockDef.color); else cell.style.visibility = 'hidden'; cell.style.gridColumn = c + 1; cell.style.gridRow = r + 1; previewEl.appendChild(cell); } } else { previewEl.classList.add('empty'); previewEl.style.width = 'auto'; previewEl.style.height = 'auto'; } }); }
+
+        // --- Suggestion Logic (Existing - No Changes) ---
+        function clearSuggestionVisuals() { currentSuggestionCells.forEach(cell => cell.classList.remove('suggestion-cell')); currentSuggestionCells.clear(); }
+        function clearSuggestionData() { lastValidSuggestionCoords = { row: null, col: null }; }
+        function clearSuggestion() { clearSuggestionVisuals(); clearSuggestionData(); }
+        function showSuggestion(targetRow, targetCol, blockDef) { clearSuggestionVisuals(); clearSuggestionData(); if (!blockDef || !isValidPlacement(blockDef, targetRow, targetCol)) { return; } lastValidSuggestionCoords = { row: targetRow, col: targetCol }; blockDef.shape.forEach(point => { const r = targetRow + point[1]; const c = targetCol + point[0]; if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) { const cellElement = gridElement.querySelector(`[data-row='${r}'][data-col='${c}']`); if (cellElement) { cellElement.classList.add('suggestion-cell'); currentSuggestionCells.add(cellElement); } } }); }
+
+        // --- Drag and Drop Logic (Existing - No Changes) ---
+        function handleDragStart(event) { if (settingsModal.classList.contains('visible')) { event.preventDefault(); return; } const previewElement = event.target.closest('.block-preview'); if (!previewElement || previewElement.classList.contains('empty')) { event.preventDefault(); return; } const blockIndex = parseInt(previewElement.dataset.blockIndex); const blockDef = currentBlocks[blockIndex]; if (!blockDef) return; draggedBlockData = { element: previewElement, blockDef: blockDef, previewIndex: blockIndex }; event.dataTransfer.setData('text/plain', blockIndex.toString()); event.dataTransfer.effectAllowed = 'move'; createDragGhost(blockDef, event); setTimeout(() => { if (previewElement) previewElement.classList.add('dragging'); }, 0); }
+        function createDragGhost(blockDef, dragEvent) { dragGhostContainer.innerHTML = ''; const ghost = document.createElement('div'); ghost.classList.add('drag-ghost'); const maxX = blockDef.shape.reduce((max, p) => Math.max(max, p[0]), -1) + 1; const maxY = blockDef.shape.reduce((max, p) => Math.max(max, p[1]), -1) + 1; ghost.style.gridTemplateColumns = `repeat(${maxX}, var(--cell-size))`; ghost.style.gridTemplateRows = `repeat(${maxY}, var(--cell-size))`; ghost.style.width = `calc(${maxX} * var(--cell-size) + (${maxX}) * 2px)`; ghost.style.height = `calc(${maxY} * var(--cell-size) + (${maxY}) * 2px)`; const shapeMap = {}; blockDef.shape.forEach(p => { shapeMap[`${p[0]},${p[1]}`] = true; }); for (let r = 0; r < maxY; r++) for (let c = 0; c < maxX; c++) { const cell = document.createElement('div'); cell.classList.add('preview-cell'); if (shapeMap[`${c},${r}`]) cell.classList.add(blockDef.color); else cell.style.visibility = 'hidden'; cell.style.gridColumn = c + 1; cell.style.gridRow = r + 1; ghost.appendChild(cell); } dragGhostContainer.appendChild(ghost); positionDragGhost(dragEvent); try { const img = new Image(); img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs='; dragEvent.dataTransfer.setDragImage(img, 0, 0); } catch (e) {} }
+        function positionDragGhost(moveEvent) { const ghost = dragGhostContainer.querySelector('.drag-ghost'); if (ghost && moveEvent) { ghost.style.left = `${moveEvent.clientX}px`; ghost.style.top = `${moveEvent.clientY}px`; } }
+        function handleDragOver(event) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; positionDragGhost(event); const targetCell = event.target.closest('.grid-cell'); if (targetCell && draggedBlockData) { const row = parseInt(targetCell.dataset.row); const col = parseInt(targetCell.dataset.col); showSuggestion(row, col, draggedBlockData.blockDef); } }
+        function handleDragEnter(event) { event.preventDefault(); }
+        function handleDragLeave(event) { const related = event.relatedTarget; if (!gridElement.contains(related)) { clearSuggestionVisuals(); } }
+        function handleDrop(event) { event.preventDefault(); const blockDataForDrop = draggedBlockData ? { ...draggedBlockData } : null; clearSuggestionVisuals(); clearDragGhost(); if (!blockDataForDrop) return; let placedSuccessfully = false; const targetCell = event.target.closest('.grid-cell'); if (targetCell) { const row = parseInt(targetCell.dataset.row); const col = parseInt(targetCell.dataset.col); const blockDef = blockDataForDrop.blockDef; if (isValidPlacement(blockDef, row, col)) { placeBlock(blockDef, row, col); markPreviewAsUsed(blockDataForDrop.previewIndex); const linesCleared = checkForAndClearLines(); updateScore(blockDef.shape.length, linesCleared); if (currentBlocks.every(block => block === null)) { setTimeout(() => { generateNextBlocksSet(); displayBlocksPreview(); if (checkGameOver()) triggerGameOver(); }, linesCleared > 0 ? 450 : 50); } else { if (checkGameOver()) triggerGameOver(); } placedSuccessfully = true; } } if (!placedSuccessfully) { playSound(sfxInvalid); if (blockDataForDrop.element) blockDataForDrop.element.classList.remove('dragging'); } else { draggedBlockData = null; } }
+        function handleDragEnd(event) { if (draggedBlockData && lastValidSuggestionCoords.row !== null) { console.log("DragEnd: Placing block at last valid suggestion (Snap):", lastValidSuggestionCoords); const { row, col } = lastValidSuggestionCoords; const blockDef = draggedBlockData.blockDef; const previewIndex = draggedBlockData.previewIndex; placeBlock(blockDef, row, col); markPreviewAsUsed(previewIndex); const linesCleared = checkForAndClearLines(); updateScore(blockDef.shape.length, linesCleared); if (currentBlocks.every(block => block === null)) { setTimeout(() => { generateNextBlocksSet(); displayBlocksPreview(); if (checkGameOver()) triggerGameOver(); }, linesCleared > 0 ? 450 : 50); } else { if (checkGameOver()) triggerGameOver(); } } else if (draggedBlockData && draggedBlockData.element) { console.log("DragEnd: No successful drop or snap."); playSound(sfxInvalid); draggedBlockData.element.classList.remove('dragging'); } clearSuggestion(); clearDragGhost(); blockPreviewElements.forEach(el => el.classList.remove('dragging')); draggedBlockData = null; }
+        function clearDragGhost() { dragGhostContainer.innerHTML = ''; }
+
+        // --- Game Logic (Existing - Minor sound change) ---
+        function isValidPlacement(blockDef, startRow, startCol) { if (!blockDef || !blockDef.shape) return false; for (const point of blockDef.shape) { const r = startRow + point[1]; const c = startCol + point[0]; if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE || grid[r][c] !== null) return false; } return true; }
+        function placeBlock(blockDef, startRow, startCol) { let pointsPlaced = 0; blockDef.shape.forEach(point => { const r = startRow + point[1]; const c = startCol + point[0]; if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) { grid[r][c] = blockDef.color; const cellElement = gridElement.querySelector(`[data-row='${r}'][data-col='${c}']`); if (cellElement) { cellElement.className = 'grid-cell occupied'; cellElement.classList.add(blockDef.color); cellElement.classList.add('placed'); setTimeout(() => { if (cellElement) cellElement.classList.remove('placed'); }, 200); pointsPlaced++; } } }); playSound(sfxPlace); console.log(`Placed block ${blockDef.type}, ${pointsPlaced} points.`); }
+        function markPreviewAsUsed(index) { if (index >= 0 && index < currentBlocks.length) { if(currentBlocks[index] === null) return; currentBlocks[index] = null; const previewEl = blockPreviewElements[index]; if (previewEl) { previewEl.innerHTML = ''; previewEl.classList.add('empty'); previewEl.setAttribute('draggable', 'false'); } } }
+        function checkForAndClearLines() { let rowsToClear = [], colsToClear = []; for (let r = 0; r < GRID_SIZE; r++) if (grid[r].every(cell => cell !== null)) rowsToClear.push(r); for (let c = 0; c < GRID_SIZE; c++) { let colFull = true; for (let r = 0; r < GRID_SIZE; r++) if (grid[r][c] === null) { colFull = false; break; } if (colFull) colsToClear.push(c); } let linesClearedCount = rowsToClear.length + colsToClear.length; if (linesClearedCount > 0) { animateAndClearLines(rowsToClear, colsToClear); playSound(sfxClear); return linesClearedCount; } return 0; }
+        function animateAndClearLines(rows, cols) { const cellsToClear = new Set(); rows.forEach(r => { for (let c = 0; c < GRID_SIZE; c++) cellsToClear.add(`${r}-${c}`); }); cols.forEach(c => { for (let r = 0; r < GRID_SIZE; r++) cellsToClear.add(`${r}-${c}`); }); cellsToClear.forEach(key => { const [r, c] = key.split('-').map(Number); const cellElement = gridElement.querySelector(`[data-row='${r}'][data-col='${c}']`); if (cellElement) cellElement.classList.add('clearing'); }); setTimeout(() => { cellsToClear.forEach(key => { const [r, c] = key.split('-').map(Number); if (grid[r] && grid[r][c] !== undefined) grid[r][c] = null; const cellElement = gridElement.querySelector(`[data-row='${r}'][data-col='${c}']`); if (cellElement) cellElement.className = 'grid-cell'; }); }, 400); }
+        function updateScore(pointsForPlacement, linesCleared) { let basePoints = pointsForPlacement, lineClearBonus = 0, comboBonus = 0; const baseLineScore = 10; if (linesCleared > 0) { lineClearBonus = linesCleared * GRID_SIZE * baseLineScore; lineClearBonus += (linesCleared * linesCleared) * (GRID_SIZE * baseLineScore / 2); comboCount++; if (comboCount > 1) { comboBonus = (comboCount - 1) * 50 * linesCleared; showComboMessage(comboCount); playSound(sfxCombo); } } else { comboCount = 0; } const turnScore = basePoints + lineClearBonus + comboBonus; score += turnScore; saveHighScore(); }
+        function showComboMessage(count) { const e = comboMessageContainer.querySelector('.combo-message'); if(e)e.remove(); const m = document.createElement('div'); m.classList.add('combo-message'); m.textContent = `Combo x${count}!`; comboMessageContainer.appendChild(m); setTimeout(()=>{m.remove();}, 1500); }
+        function updateScoreDisplay() { currentScoreElement.textContent = score; if (!highScoreSpan.classList.contains('highscore-flash')) { highScoreSpan.textContent = highScore; } }
+        function checkGameOver() { const availableBlocks = currentBlocks.filter(b => b !== null); if (availableBlocks.length === 0) return false; for (const blockDef of availableBlocks) { if (!blockDef) continue; for (let r = 0; r < GRID_SIZE; r++) for (let c = 0; c < GRID_SIZE; c++) if (isValidPlacement(blockDef, r, c)) return false; } return true; }
+        function triggerGameOver() { if (isGameOver) return; isGameOver = true; playSound(sfxGameOver); finalScoreElement.textContent = `Final Score: ${score}`; gameOverScreen.classList.add('visible'); gridElement.style.opacity = 0.5; nextBlocksContainer.style.opacity = 0.5; clearDragGhost(); blockPreviewElements.forEach(el => el.setAttribute('draggable', 'false')); clearSuggestion(); }
+
+        // --- Function to handle About Button click ---
+        function handleAboutClick() {
+            console.log("About button clicked");
+            // !!! IMPORTANT: Replace this URL with your actual Telegram channel link !!!
+            const telegramUrl = 'https://t.me/+frcUfgGeZ2c3MjM1';
+            window.open(telegramUrl, '_blank'); // Opens the link in a new tab
+
+            // Optional: Close the settings modal after clicking the button
+            // settingsModal.classList.remove('visible');
+        }
+
+        // --- Event Listeners Setup ---
+        function setupEventListeners() {
+            // Drag listeners (Existing)
+            nextBlocksContainer.addEventListener('dragstart', handleDragStart);
+            gridElement.addEventListener('dragover', handleDragOver);
+            gridElement.addEventListener('dragenter', handleDragEnter);
+            gridElement.addEventListener('dragleave', handleDragLeave);
+            gridElement.addEventListener('drop', handleDrop);
+            document.addEventListener('dragend', handleDragEnd);
+
+            // Buttons and Settings (Existing + Added About Button Listener)
+            restartButton.addEventListener('click', initGame);
+            settingsButton.addEventListener('click', () => settingsModal.classList.add('visible'));
+            closeSettingsButton.addEventListener('click', () => settingsModal.classList.remove('visible'));
+            settingsModal.addEventListener('click', (event) => { if (event.target === settingsModal) settingsModal.classList.remove('visible'); });
+            soundToggle.addEventListener('change', toggleSound);
+            aboutButton.addEventListener('click', handleAboutClick); // <-- ADDED listener for About button
+
+            // Touch Event Handling (Existing - abbreviated for brevity)
+            let touchStartX = 0, touchStartY = 0, touchMoveX = 0, touchMoveY = 0;
+            let touchTargetPreview = null, isTouching = false, touchDragStarted = false;
+            nextBlocksContainer.addEventListener('touchstart', (event) => { if (settingsModal.classList.contains('visible')) return; const previewElement = event.target.closest('.block-preview'); if (previewElement && !previewElement.classList.contains('empty')) { isTouching = true; touchDragStarted = false; touchTargetPreview = previewElement; const touch = event.touches[0]; touchStartX = touch.clientX; touchStartY = touch.clientY; touchMoveX = touchStartX; touchMoveY = touchStartY; const blockIndex = parseInt(previewElement.dataset.blockIndex); const blockDef = currentBlocks[blockIndex]; if (!blockDef) return; draggedBlockData = { element: previewElement, blockDef: blockDef, previewIndex: blockIndex }; } else { isTouching = false; touchTargetPreview = null; draggedBlockData = null; } }, { passive: true });
+            document.addEventListener('touchmove', (event) => { if (!isTouching || !draggedBlockData) return; const touch = event.touches[0]; touchMoveX = touch.clientX; touchMoveY = touch.clientY; const deltaX = Math.abs(touchMoveX - touchStartX); const deltaY = Math.abs(touchMoveY - touchStartY); if (!touchDragStarted && (deltaX > 5 || deltaY > 5)) { touchDragStarted = true; event.preventDefault(); createDragGhost(draggedBlockData.blockDef, touch); positionDragGhost(touch); if (draggedBlockData.element) draggedBlockData.element.classList.add('dragging'); } if (touchDragStarted) { event.preventDefault(); positionDragGhost(touch); const elementUnderTouch = document.elementFromPoint(touchMoveX, touchMoveY); const targetCell = elementUnderTouch ? elementUnderTouch.closest('.grid-cell') : null; if (targetCell) { const row = parseInt(targetCell.dataset.row); const col = parseInt(targetCell.dataset.col); showSuggestion(row, col, draggedBlockData.blockDef); } else { clearSuggestionVisuals(); } } }, { passive: false });
+            document.addEventListener('touchend', (event) => { const wasDragging = touchDragStarted; const blockDataBeforeCleanup = draggedBlockData ? { ...draggedBlockData } : null; const suggestionCoordsBeforeCleanup = { ...lastValidSuggestionCoords }; clearSuggestionVisuals(); if (!isTouching) { return; } let placedSuccessfully = false; if (wasDragging) { clearDragGhost(); const droppedElement = document.elementFromPoint(touchMoveX, touchMoveY); const targetCell = droppedElement ? droppedElement.closest('.grid-cell') : null; if (targetCell && blockDataBeforeCleanup) { const row = parseInt(targetCell.dataset.row); const col = parseInt(targetCell.dataset.col); const blockDef = blockDataBeforeCleanup.blockDef; if (isValidPlacement(blockDef, row, col)) { placeBlock(blockDef, row, col); markPreviewAsUsed(blockDataBeforeCleanup.previewIndex); const linesCleared = checkForAndClearLines(); updateScore(blockDef.shape.length, linesCleared); if (currentBlocks.every(block => block === null)) { setTimeout(() => { generateNextBlocksSet(); displayBlocksPreview(); if (checkGameOver()) triggerGameOver(); }, linesCleared > 0 ? 450 : 50); } else { if (checkGameOver()) triggerGameOver(); } placedSuccessfully = true; } } if (!placedSuccessfully && blockDataBeforeCleanup && suggestionCoordsBeforeCleanup.row !== null) { console.log("TouchEnd: Placing block at last valid suggestion (Snap):", suggestionCoordsBeforeCleanup); const { row, col } = suggestionCoordsBeforeCleanup; const blockDef = blockDataBeforeCleanup.blockDef; const previewIndex = blockDataBeforeCleanup.previewIndex; placeBlock(blockDef, row, col); markPreviewAsUsed(previewIndex); const linesCleared = checkForAndClearLines(); updateScore(blockDef.shape.length, linesCleared); if (currentBlocks.every(block => block === null)) { setTimeout(() => { generateNextBlocksSet(); displayBlocksPreview(); if (checkGameOver()) triggerGameOver(); }, linesCleared > 0 ? 450 : 50); } else { if (checkGameOver()) triggerGameOver(); } placedSuccessfully = true; } if (!placedSuccessfully && blockDataBeforeCleanup) { console.log("TouchEnd: Invalid drop/snap."); playSound(sfxInvalid); if (blockDataBeforeCleanup.element) blockDataBeforeCleanup.element.classList.remove('dragging'); } } else { console.log("Touch End (tap, no drag)"); } draggedBlockData = null; touchTargetPreview = null; isTouching = false; touchDragStarted = false; clearDragGhost(); clearSuggestionData(); if (blockDataBeforeCleanup && blockDataBeforeCleanup.element) { blockDataBeforeCleanup.element.classList.remove('dragging'); } });
+
+            console.log("Event listeners setup complete.");
+        }
+
+        // --- Start Game (Existing) ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initGame();
+            setupEventListeners();
+        });
+
+    </script>
+</body>
+</html>
